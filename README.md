@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
-    <img src="logo.svg" width="132" alt="aura">
-  </picture>
+  <img src="logo.svg" width="140" alt="aura">
 </p>
 
 # aura
