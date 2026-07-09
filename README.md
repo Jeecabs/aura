@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" width="140" alt="aura">
+  <img src="logo.png" width="200" alt="aura">
 </p>
 
 # aura
