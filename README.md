@@ -15,13 +15,6 @@ macOS only. Everywhere else it's a silent no-op.
 pi install https://github.com/Jeecabs/aura
 ```
 
-If GitHub auth isn't wired into Git yet:
-
-```bash
-gh auth login
-gh auth setup-git
-```
-
 ### Local development
 
 ```bash
