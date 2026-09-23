@@ -8,6 +8,10 @@ A [pi](https://github.com/badlogic/pi-mono) extension that gives the input frame
 
 Aura uses the same compact rounded frame as Lohan's Land. With both packages active, Aura decorates the integrated frame. It does not replace the editor. Status colors and editor content stay untouched.
 
+<p align="center">
+  <img src="demo.gif" alt="The pi input frame glowing cyan and pink in time with music">
+</p>
+
 macOS only. Everywhere else it's a silent no-op.
 
 
