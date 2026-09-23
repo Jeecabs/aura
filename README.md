@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="logo.png" width="200" alt="aura">
-</p>
-
 # aura
 
 A [pi](https://github.com/badlogic/pi-mono) extension that gives the input frame an aura. It breathes with your music. It samples your Mac's system-audio loudness and glows the frame in time: dim when it's quiet, laser cyan through hot pink to white-hot when it's loud.
