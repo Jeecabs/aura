@@ -82,7 +82,7 @@ function canRenderRoundedFrame(baseLines: readonly string[], width: number): boo
 	return width >= 10 && baseLines.length >= 2;
 }
 
-/** Render the same compact rounded input frame used by Lohan's Land. */
+/** Render the compact rounded input frame. */
 export function renderRoundedAuraEditor(
 	baseLines: string[],
 	width: number,

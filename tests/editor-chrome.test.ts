@@ -14,7 +14,7 @@ function occurrences(text: string, value: string): number {
   return text.split(value).length - 1;
 }
 
-test("standalone Aura uses Lohan's compact rounded frame", () => {
+test("standalone Aura uses a compact rounded frame", () => {
   const contentWidth = 34;
   const rendered = renderRoundedAuraEditor(
     [

@@ -6,7 +6,7 @@
 
 A [pi](https://github.com/badlogic/pi-mono) extension that gives the input frame an aura. It breathes with your music. It samples your Mac's system-audio loudness and glows the frame in time: dim when it's quiet, laser cyan through hot pink to white-hot when it's loud.
 
-Aura uses the same compact rounded frame as Lohan's Land. With both packages active, Aura decorates the integrated frame. It does not replace the editor. Status colors and editor content stay untouched.
+It works on stock pi with no other extensions. It does not replace the editor. Status colors and editor content stay untouched.
 
 <p align="center">
   <img src="demo.gif" alt="The pi input frame glowing cyan and pink in time with music">
@@ -50,9 +50,7 @@ The setting survives restarts. If it was on when you quit, it comes back on.
 
 ## Editor compatibility
 
-Aura changes editor rendering only. With Lohan's Land, Powerline retains its input, shell, stash, autocomplete, and status behavior. Aura colors only the frame glyphs.
-
-Without Lohan's Land, Aura wraps the current custom editor instance. If no custom editor exists, Aura supplies the same rounded frame.
+Aura changes editor rendering only. On stock pi it supplies a compact rounded frame. If another extension already installed a custom editor, Aura wraps that editor and colors only the frame glyphs, so its input and status behavior stay intact.
 
 
 ## Requirements
@@ -77,6 +75,6 @@ There's only one honest signal here, loudness, so it's shown as one thing: inten
 
 | File | What it does |
 | --- | --- |
-| `src/index.ts` | The extension: `/aura`, auto-gain, editor wrapping, and Lohan's Land composition. |
+| `src/index.ts` | The extension: `/aura`, auto-gain, and editor wrapping. |
 | `src/editor-chrome.ts` | The shared rounded frame shape and frame-only glow renderer. |
 | `src/system-audio.ts` | `SystemAudioSampler`, compiles and runs the Swift helper, exposes a `db()` reading. |
