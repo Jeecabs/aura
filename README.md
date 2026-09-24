@@ -52,24 +52,21 @@ Aura can also drive a [Ghostty custom shader](https://ghostty.org/docs/config/re
 1. Add the bundled shader to your Ghostty config, then reload the config:
 
    ```text
-   custom-shader = ~/.pi/agent/extensions/aura/shaders/aura.glsl
+   custom-shader = ~/.pi/agent/git/github.com/Jeecabs/aura/shaders/aura.glsl
    ```
+
+   That's where `pi install` puts it. For a local-dev clone, use `~/.pi/agent/extensions/aura/shaders/aura.glsl`.
 
 2. In pi, run `/aura shader`. It needs `/aura` on as well.
 
-What it reacts to:
+Light spills in from the window edges and pools along the bottom, where pi's input frame sits, so the window and the frame read as one glow:
 
-| Signal | Effect |
-|---|---|
-| Loudness | Edge aura, text bloom, plasma brightness |
-| Bass | Screen shake, pulse rings |
-| Kick drum (beat) | Zoom punch, shockwave that ripples the text, white flash |
-| Mids | Plasma flow speed |
-| Treble | RGB split, twinkling starfield |
-| Agent thinking | Violet vortex and violet edges |
-| Agent streaming tokens | Starfield and text bloom |
-| Tool running | Green scan beam sweeping the window |
-| Tool error | Red glitch: sliced, shifted, flashing |
+- **Loudness** sets how bright the light is and how far it reaches, using the frame's cyan, hot pink and white-hot ramp.
+- **Beats** make it breathe a little.
+- **Agent thinking** adds a slow violet breath, even in silence.
+- **Tool errors** tint it red briefly.
+
+Text stays crisp: glyphs only catch a hint of the light. Silence with an idle agent leaves the window untouched.
 
 Ghostty shaders can't take custom inputs, so Aura writes these signals into palette slots 232-234 (OSC 4) about 30 times a second. The shader reads them back through `iPalette`; the layout is at the top of `shaders/aura.glsl`. Palette-only writes don't make pi redraw. Aura restores the slots when the shader is off, Aura is off or pi exits. While it's on, 256-color apps that use those slots see odd grays. Write your own shader against the same uniforms if you want a different look.
 
