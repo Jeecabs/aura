@@ -9,13 +9,15 @@ import {
 	resolveEditorLayerAction,
 	wrapEditorRenderer,
 } from "./editor-chrome.js";
-import { SHADER_PALETTE_RESET, shaderLevelByte, shaderPaletteSequence } from "./ghostty-shader.js";
+import { AgentSignals, SHADER_PALETTE_RESET, ShaderFeed } from "./ghostty-shader.js";
 import { SystemAudioSampler } from "./system-audio.js";
 
 type EditorFactory = NonNullable<ReturnType<ExtensionContext["ui"]["getEditorComponent"]>>;
 
 const STATE_TYPE = "aura-state";
 const FRAME_MS = 90;
+// Palette-only writes don't make pi re-render, so the shader can run faster than the frame.
+const SHADER_FRAME_MS = 33;
 const DECORATOR_COLLECT_EVENT = "pi:editor-decoration:collect:v1";
 const DECORATOR_HOST_QUERY_EVENT = "pi:editor-decoration:host-query:v1";
 const DECORATOR_HOSTS_CHANGED_EVENT = "pi:editor-decoration:hosts-changed:v1";
@@ -120,7 +122,10 @@ export default function (pi: ExtensionAPI) {
 	let active = false;
 	let truecolor = false;
 	let shader = false;
-	let shaderByte: number | undefined;
+	let shaderTimer: ReturnType<typeof setInterval> | undefined;
+	let shaderWritten = false;
+	const shaderFeed = new ShaderFeed();
+	const agent = new AgentSignals();
 	let sessionActive = false;
 	let currentCtx: ExtensionContext | undefined;
 	let sampler: SystemAudioSampler | undefined;
@@ -187,22 +192,26 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.setEditorComponent(auraEditorFactory);
 	};
 
-	const writeShaderLevel = (): void => {
-		if (!shader) return;
-		const byte = shaderLevelByte(glow.level);
-		if (byte === shaderByte) return;
-		shaderByte = byte;
-		process.stdout.write(shaderPaletteSequence(byte));
+	const writeShaderFrame = (): void => {
+		const out = shaderFeed.next(getDb(), sampler?.bands() ?? { bass: -120, mid: -120, treble: -120 }, agent);
+		if (!out) return;
+		shaderWritten = true;
+		process.stdout.write(out);
 	};
 
-	const resetShaderPalette = (): void => {
-		if (shaderByte === undefined) return;
-		shaderByte = undefined;
+	const stopShader = (): void => {
+		if (shaderTimer) {
+			clearInterval(shaderTimer);
+			shaderTimer = undefined;
+		}
+		shaderFeed.reset();
+		if (!shaderWritten) return;
+		shaderWritten = false;
 		process.stdout.write(SHADER_PALETTE_RESET);
 	};
 
 	const stopRuntime = (): void => {
-		resetShaderPalette();
+		stopShader();
 		if (timer) {
 			clearInterval(timer);
 			timer = undefined;
@@ -221,10 +230,7 @@ export default function (pi: ExtensionAPI) {
 
 	const ensureRenderTimer = (): void => {
 		if (timer) return;
-		timer = setInterval(() => {
-			glow.tick();
-			writeShaderLevel();
-		}, FRAME_MS);
+		timer = setInterval(() => glow.tick(), FRAME_MS);
 	};
 
 	const syncRuntime = (): void => {
@@ -234,6 +240,8 @@ export default function (pi: ExtensionAPI) {
 		}
 		ensureSampler();
 		ensureRenderTimer();
+		if (!shader) stopShader();
+		else shaderTimer ??= setInterval(writeShaderFrame, SHADER_FRAME_MS);
 	};
 
 	pi.events.on(DECORATOR_COLLECT_EVENT, (value) => {
@@ -244,6 +252,25 @@ export default function (pi: ExtensionAPI) {
 
 	pi.events.on(DECORATOR_HOSTS_CHANGED_EVENT, () => {
 		if (sessionActive && currentCtx) syncEditor(currentCtx);
+	});
+
+	// Agent activity for the shader. Handlers only flip flags; the feed eases them.
+	pi.on("message_update", async (event) => {
+		const type = event.assistantMessageEvent.type;
+		if (type === "thinking_start" || type === "thinking_delta") agent.thinking = true;
+		else if (type === "thinking_end" || type === "text_start" || type === "toolcall_start") agent.thinking = false;
+		if (type === "text_delta" || type === "thinking_delta" || type === "toolcall_delta") agent.tokens++;
+		if (type === "error") agent.errored = true;
+	});
+	pi.on("tool_execution_start", async () => {
+		agent.tools++;
+	});
+	pi.on("tool_execution_end", async (event) => {
+		agent.tools = Math.max(0, agent.tools - 1);
+		if (event.isError) agent.errored = true;
+	});
+	pi.on("agent_settled", async () => {
+		agent.clear();
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -290,7 +317,7 @@ export default function (pi: ExtensionAPI) {
 
 			if (subcommand === "shader") {
 				shader = !shader;
-				if (!shader) resetShaderPalette();
+				syncRuntime();
 				pi.appendEntry(STATE_TYPE, { active, shader });
 				const hint = !active
 					? "it glows once /aura is on"
