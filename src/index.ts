@@ -9,6 +9,7 @@ import {
 	resolveEditorLayerAction,
 	wrapEditorRenderer,
 } from "./editor-chrome.js";
+import { SHADER_PALETTE_RESET, shaderLevelByte, shaderPaletteSequence } from "./ghostty-shader.js";
 import { SystemAudioSampler } from "./system-audio.js";
 
 type EditorFactory = NonNullable<ReturnType<ExtensionContext["ui"]["getEditorComponent"]>>;
@@ -59,6 +60,10 @@ class AuraGlowController {
 
 	setRequestRender(requestRender: (() => void) | undefined): void {
 		this.requestRender = requestRender;
+	}
+
+	get level(): number {
+		return this.glow;
 	}
 
 	reset(): void {
@@ -114,6 +119,8 @@ class AuraEditor extends CustomEditor {
 export default function (pi: ExtensionAPI) {
 	let active = false;
 	let truecolor = false;
+	let shader = false;
+	let shaderByte: number | undefined;
 	let sessionActive = false;
 	let currentCtx: ExtensionContext | undefined;
 	let sampler: SystemAudioSampler | undefined;
@@ -180,7 +187,22 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.setEditorComponent(auraEditorFactory);
 	};
 
+	const writeShaderLevel = (): void => {
+		if (!shader) return;
+		const byte = shaderLevelByte(glow.level);
+		if (byte === shaderByte) return;
+		shaderByte = byte;
+		process.stdout.write(shaderPaletteSequence(byte));
+	};
+
+	const resetShaderPalette = (): void => {
+		if (shaderByte === undefined) return;
+		shaderByte = undefined;
+		process.stdout.write(SHADER_PALETTE_RESET);
+	};
+
 	const stopRuntime = (): void => {
+		resetShaderPalette();
 		if (timer) {
 			clearInterval(timer);
 			timer = undefined;
@@ -199,7 +221,10 @@ export default function (pi: ExtensionAPI) {
 
 	const ensureRenderTimer = (): void => {
 		if (timer) return;
-		timer = setInterval(() => glow.tick(), FRAME_MS);
+		timer = setInterval(() => {
+			glow.tick();
+			writeShaderLevel();
+		}, FRAME_MS);
 	};
 
 	const syncRuntime = (): void => {
@@ -223,9 +248,11 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		active = false;
+		shader = false;
 		for (const entry of ctx.sessionManager.getEntries()) {
 			if (entry.type !== "custom" || entry.customType !== STATE_TYPE || !isRecord(entry.data)) continue;
 			if (typeof entry.data.active === "boolean") active = entry.data.active;
+			if (typeof entry.data.shader === "boolean") shader = entry.data.shader;
 		}
 
 		currentCtx = ctx;
@@ -237,7 +264,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
-		pi.appendEntry(STATE_TYPE, { active });
+		pi.appendEntry(STATE_TYPE, { active, shader });
 		sessionActive = false;
 		stopRuntime();
 		restoreOwnEditor(ctx);
@@ -248,7 +275,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("aura", {
 		description: "Toggle the audio-reactive glow on the input frame",
 		getArgumentCompletions: (prefix: string) => {
-			const items = ["on", "off", "status"].map((command) => ({ value: command, label: command }));
+			const items = ["on", "off", "status", "shader"].map((command) => ({ value: command, label: command }));
 			const filtered = items.filter((item) => item.value.startsWith(prefix.toLowerCase()));
 			return filtered.length > 0 ? filtered : null;
 		},
@@ -257,7 +284,20 @@ export default function (pi: ExtensionAPI) {
 
 			if (subcommand === "status") {
 				const audio = sampler ? `: ${sampler.status()}` : "";
-				ctx.ui.notify(`Aura ${active ? "on" : "off"}${audio}.`, "info");
+				ctx.ui.notify(`Aura ${active ? "on" : "off"}, shader ${shader ? "on" : "off"}${audio}.`, "info");
+				return;
+			}
+
+			if (subcommand === "shader") {
+				shader = !shader;
+				if (!shader) resetShaderPalette();
+				pi.appendEntry(STATE_TYPE, { active, shader });
+				const hint = !active
+					? "it glows once /aura is on"
+					: process.env.TERM_PROGRAM === "ghostty"
+						? "load shaders/aura.glsl as a Ghostty custom-shader"
+						: "only Ghostty custom shaders read this";
+				ctx.ui.notify(`Aura shader ${shader ? `on (${hint})` : "off"}.`, "info");
 				return;
 			}
 
