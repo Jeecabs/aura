@@ -51,10 +51,23 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec3 orbit = hue(angle + iTime * (0.08 + 0.5 * level));
     vec3 edgeCol = mix(auraRamp(level), orbit, 0.45) * glow * 1.4;
 
+    // Full-screen visualizer behind the text: plasma plus pulse rings.
+    // Only empty background pixels get it, so text stays readable.
+    float bgMask = 1.0 - smoothstep(0.02, 0.12, distance(term.rgb, iBackgroundColor));
+    vec2 p = fromCenter * vec2(res.x / res.y, 1.0);
+    float t = iTime * (0.15 + 1.2 * level);
+    float plasma = sin(p.x * 6.0 + t) + sin(p.y * 7.0 - t * 1.3)
+        + sin((p.x + p.y) * 5.0 + t * 0.7) + sin(length(p) * 9.0 - t * 1.7);
+    plasma = plasma * 0.125 + 0.5;
+    vec3 plasmaCol = mix(auraRamp(plasma * level + 0.1), hue(plasma + t * 0.05), 0.35);
+    float r = length(p);
+    float rings = pow(0.5 + 0.5 * sin(r * 28.0 - iTime * (4.0 + 10.0 * level)), 8.0) * exp(-r * 1.5);
+    vec3 visualizer = (plasmaCol * 0.35 * level + auraRamp(level) * rings * 0.5 * punch) * bgMask;
+
     // Scanline shimmer and a white flash on the very loudest peaks.
     float scan = 1.0 - 0.08 * punch * (0.5 + 0.5 * sin(fragCoord.y * 1.6 + iTime * 18.0));
     float flash = smoothstep(0.92, 1.0, level) * 0.12;
 
-    vec3 col = (base + bloom) * scan + edgeCol + flash;
+    vec3 col = (base + bloom + visualizer) * scan + edgeCol + flash;
     fragColor = vec4(col, term.a);
 }
