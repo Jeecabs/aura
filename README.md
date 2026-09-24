@@ -39,9 +39,25 @@ Reload pi if it's already running:
 /aura on
 /aura off
 /aura status   show state and the current dB reading
+/aura shader   toggle the Ghostty shader feed (opt-in)
 ```
 
 The setting survives restarts. If it was on when you quit, it comes back on.
+
+
+## Ghostty shader
+
+Aura can also drive a [Ghostty custom shader](https://ghostty.org/docs/config/reference#custom-shader), so the whole window pulses and not just the input frame. It's opt-in:
+
+1. Add the bundled shader to your Ghostty config, then reload the config:
+
+   ```text
+   custom-shader = ~/.pi/agent/extensions/aura/shaders/aura.glsl
+   ```
+
+2. In pi, run `/aura shader`. It needs `/aura` on as well.
+
+Ghostty shaders can't take custom inputs, so Aura writes the loudness into palette slot 232 (OSC 4), and the shader reads it back through `iPalette[232].r`. Aura restores the slot when the shader is off, Aura is off or pi exits. While it's on, 256-color apps that use slot 232 see a red tint. Write your own shader against the same uniform if you want a different look.
 
 
 ## Editor compatibility
