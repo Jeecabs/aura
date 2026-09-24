@@ -59,10 +59,11 @@ Aura can also drive a [Ghostty custom shader](https://ghostty.org/docs/config/re
 
 2. In pi, run `/aura shader`. It needs `/aura` on as well.
 
-A low glow rises from the bottom edge, under pi's input frame, as if the frame lights the window from below. The rest of the window is left alone:
+A strip of light runs along the bottom edge, under pi's input frame, in exactly the colors the frame is showing, as if the frame lights the window from below. The rest of the window is left alone:
 
-- **Loudness** sets how bright the light is and how far it reaches, using the frame's cyan, hot pink and white-hot ramp.
-- **Beats** make it breathe a little.
+- **Idle motion**: its brightness drifts slowly along the strip, so it's never a flat bar.
+- **Loudness** makes it brighter and taller, following the frame from cyan to hot pink. It rises quickly and settles slowly, so it doesn't flicker.
+- **Beats** each send one swell outward from the center.
 - **Agent thinking** adds a slow violet breath, even in silence.
 - **Tool errors** tint it red briefly.
 

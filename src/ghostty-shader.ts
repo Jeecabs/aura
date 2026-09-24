@@ -2,7 +2,7 @@ import type { AudioBands } from "./system-audio.js";
 
 // Ghostty shaders can't receive custom uniforms, but they can read the live
 // palette (`iPalette`). Aura smuggles its signals through a few slots:
-//   232: r = overall level, g = bass,      b = treble
+//   232: r = smoothed level, g = bass,      b = treble
 //   233: r = beat pulse,    g = mid,       b = token stream rate
 //   234: r = thinking,      g = tool busy, b = error flash
 // ponytail: fixed slots; 256-color apps using 232-234 see odd grays while on.
@@ -91,6 +91,7 @@ export class ShaderFeed {
 	private tool = 0;
 	private tokenRate = 0;
 	private error = 0;
+	private glow = 0;
 	private last = new Map<number, string>();
 
 	next(db: number, bands: AudioBands, agent: AgentSignals): string {
@@ -99,11 +100,14 @@ export class ShaderFeed {
 		// ~3 deltas per 33 ms frame is a fast stream.
 		this.tokenRate = ease(this.tokenRate, clamp01(agent.tokens / 3), 0.25);
 		this.error = agent.errored ? 1 : this.error * 0.9;
+		// Full-window light reads as flicker at the meter's speed; swell in, settle out.
+		const level = this.level.next(db);
+		this.glow = ease(this.glow, level, level > this.glow ? 0.2 : 0.05);
 		agent.tokens = 0;
 		agent.errored = false;
 
 		const values: [number, [number, number, number]][] = [
-			[232, [this.level.next(db), this.bass.next(bands.bass), this.treble.next(bands.treble)]],
+			[232, [this.glow, this.bass.next(bands.bass), this.treble.next(bands.treble)]],
 			[233, [this.beat.next(bands.bass), this.mid.next(bands.mid), this.tokenRate]],
 			[234, [this.thinking, this.tool, this.error]],
 		];
