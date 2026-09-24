@@ -19,6 +19,14 @@ interface CommandResult {
 	code: number;
 }
 
+export interface AudioBands {
+	bass: number;
+	mid: number;
+	treble: number;
+}
+
+const SILENT_BANDS: AudioBands = { bass: -120, mid: -120, treble: -120 };
+
 export interface AudioSample {
 	playing: boolean;
 	amplitude: number;
@@ -31,6 +39,33 @@ import CoreAudio
 
 final class AudioMeter: NSObject, SCStreamOutput {
     private var lastPrint = Date.distantPast
+    // One-pole splits at 48 kHz: bass < ~150 Hz, treble > ~4 kHz, mid between.
+    private let bassCoeff = 1.0 - exp(-2.0 * Double.pi * 150.0 / 48_000.0)
+    private let trebleCoeff = 1.0 - exp(-2.0 * Double.pi * 4_000.0 / 48_000.0)
+    private var bassState: [Double] = []
+    private var splitState: [Double] = []
+    private var sum: Double = 0
+    private var bassSum: Double = 0
+    private var midSum: Double = 0
+    private var trebleSum: Double = 0
+    private var count = 0
+
+    private func accumulate(_ x: Double, _ b: Int) {
+        bassState[b] += bassCoeff * (x - bassState[b])
+        splitState[b] += trebleCoeff * (x - splitState[b])
+        let bass = bassState[b]
+        let treble = x - splitState[b]
+        let mid = splitState[b] - bass
+        sum += x * x
+        bassSum += bass * bass
+        midSum += mid * mid
+        trebleSum += treble * treble
+        count += 1
+    }
+
+    private func toDb(_ energy: Double) -> Double {
+        20.0 * log10(max(sqrt(energy / Double(count)), 0.000001))
+    }
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, CMSampleBufferDataIsReady(sampleBuffer) else { return }
         guard let fmt = CMSampleBufferGetFormatDescription(sampleBuffer),
@@ -66,30 +101,30 @@ final class AudioMeter: NSObject, SCStreamOutput {
         let flags = asbd.mFormatFlags
         let isFloat = (flags & kAudioFormatFlagIsFloat) != 0
         let bytesPerSample = Int(asbd.mBitsPerChannel / 8)
-        var sum: Double = 0
-        var count = 0
-        for buffer in UnsafeMutableAudioBufferListPointer(abl) {
+        for (b, buffer) in UnsafeMutableAudioBufferListPointer(abl).enumerated() {
             guard let data = buffer.mData else { continue }
+            while bassState.count <= b { bassState.append(0); splitState.append(0) }
             let byteCount = Int(buffer.mDataByteSize)
             if isFloat && bytesPerSample == 4 {
                 let n = byteCount / MemoryLayout<Float>.size
                 let p = data.bindMemory(to: Float.self, capacity: n)
-                for i in 0..<n { let v = Double(p[i]); sum += v * v }
-                count += n
+                for i in 0..<n { accumulate(Double(p[i]), b) }
             } else if bytesPerSample == 2 {
                 let n = byteCount / MemoryLayout<Int16>.size
                 let p = data.bindMemory(to: Int16.self, capacity: n)
-                for i in 0..<n { let v = Double(p[i]) / 32768.0; sum += v * v }
-                count += n
+                for i in 0..<n { accumulate(Double(p[i]) / 32768.0, b) }
             }
         }
         guard count > 0 else { return }
         let now = Date()
-        if now.timeIntervalSince(lastPrint) > 0.10 {
+        if now.timeIntervalSince(lastPrint) > 0.03 {
             lastPrint = now
             let rms = sqrt(sum / Double(count))
-            let db = 20.0 * log10(max(rms, 0.000001))
-            let payload: [String: Any] = ["rms": rms, "db": db]
+            let payload: [String: Any] = [
+                "rms": rms, "db": toDb(sum),
+                "bass": toDb(bassSum), "mid": toDb(midSum), "treble": toDb(trebleSum),
+            ]
+            sum = 0; bassSum = 0; midSum = 0; trebleSum = 0; count = 0
             if let data = try? JSONSerialization.data(withJSONObject: payload), let line = String(data: data, encoding: .utf8) {
                 print(line)
                 fflush(stdout)
@@ -173,6 +208,7 @@ export class SystemAudioSampler {
 	private stdoutBuffer = "";
 	private cached: AudioSample = { playing: false, amplitude: 0 };
 	private lastDb?: number;
+	private lastBands: AudioBands = SILENT_BANDS;
 	private lastError?: string;
 
 	start(): void {
@@ -188,6 +224,7 @@ export class SystemAudioSampler {
 		this.stdoutBuffer = "";
 		this.cached = { playing: false, amplitude: 0 };
 		this.lastDb = undefined;
+		this.lastBands = SILENT_BANDS;
 	}
 
 	amplitude(): number {
@@ -198,6 +235,11 @@ export class SystemAudioSampler {
 	// their own gain mapping — the static amplitude() crushes real, compressed audio.
 	db(): number {
 		return this.lastDb ?? -120;
+	}
+
+	/** Per-band loudness in dB, split bass / mid / treble by the helper. */
+	bands(): AudioBands {
+		return this.lastBands;
 	}
 
 	status(): string {
@@ -242,9 +284,11 @@ export class SystemAudioSampler {
 			this.stdoutBuffer = this.stdoutBuffer.slice(newline + 1);
 			if (!line) continue;
 			try {
-				const data = JSON.parse(line) as { db?: unknown };
-				const db = typeof data.db === "number" ? data.db : -120;
+				const data = JSON.parse(line) as Record<string, unknown>;
+				const num = (value: unknown): number => (typeof value === "number" ? value : -120);
+				const db = num(data.db);
 				this.lastDb = db;
+				this.lastBands = { bass: num(data.bass), mid: num(data.mid), treble: num(data.treble) };
 				this.cached = { playing: db > -80, amplitude: dbToAmplitude(db) };
 			} catch {
 				// Ignore partial/non-JSON helper output.

@@ -57,7 +57,21 @@ Aura can also drive a [Ghostty custom shader](https://ghostty.org/docs/config/re
 
 2. In pi, run `/aura shader`. It needs `/aura` on as well.
 
-Ghostty shaders can't take custom inputs, so Aura writes the loudness into palette slot 232 (OSC 4), and the shader reads it back through `iPalette[232].r`. Aura restores the slot when the shader is off, Aura is off or pi exits. While it's on, 256-color apps that use slot 232 see a red tint. Write your own shader against the same uniform if you want a different look.
+What it reacts to:
+
+| Signal | Effect |
+|---|---|
+| Loudness | Edge aura, text bloom, plasma brightness |
+| Bass | Screen shake, pulse rings |
+| Kick drum (beat) | Zoom punch, shockwave that ripples the text, white flash |
+| Mids | Plasma flow speed |
+| Treble | RGB split, twinkling starfield |
+| Agent thinking | Violet vortex and violet edges |
+| Agent streaming tokens | Starfield and text bloom |
+| Tool running | Green scan beam sweeping the window |
+| Tool error | Red glitch: sliced, shifted, flashing |
+
+Ghostty shaders can't take custom inputs, so Aura writes these signals into palette slots 232-234 (OSC 4) about 30 times a second. The shader reads them back through `iPalette`; the layout is at the top of `shaders/aura.glsl`. Palette-only writes don't make pi redraw. Aura restores the slots when the shader is off, Aura is off or pi exits. While it's on, 256-color apps that use those slots see odd grays. Write your own shader against the same uniforms if you want a different look.
 
 
 ## Editor compatibility
